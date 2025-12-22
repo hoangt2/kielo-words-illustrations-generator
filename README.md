@@ -3,25 +3,84 @@
 This repository contains helper scripts designed to create illustrated vocabulary cards in Finnish:
 
 - `generate_word_list.py` — uses Google Gemini to generate a JSON array of Finnish words for a topic, with translations and bilingual example sentences.
+- `verify_grammar.py` — verifies and auto-fixes Finnish grammar and naturalness of words and example sentences using Gemini.
 - `generate_illustrations.py` — uses Gemini's image generation to create high-resolution illustrations (720x1440px). Generates centered square illustrations on white canvases and creates a mapping file for proper word-image association.
 - `add_text_to_illustrations.py` — overlays Finnish word, English translation, and bilingual example sentences on illustrations with consistent formatting and automatic text wrapping.
 - `cleanup.py` — removes all generated output files and directories to start fresh.
 
 Prerequisites
 
-- Set your Gemini/Google API key in environment variables (example using PowerShell):
+- **Create a virtual environment:**
 
-```powershell
+```bash
+# macOS/Linux
+python3 -m venv venv
+
+# Windows
+python -m venv venv
+```
+
+- **Activate the virtual environment:**
+
+```bash
+# macOS/Linux
+source venv/bin/activate
+
+# Windows PowerShell
+.\venv\Scripts\Activate.ps1
+```
+
+- **Set your Gemini/Google API key in environment variables:**
+
+```bash
+# macOS/Linux
+export GEMINI_API_KEY="YOUR_API_KEY_HERE"
+
+# Windows PowerShell
 $env:GEMINI_API_KEY = "YOUR_API_KEY_HERE"
 ```
 
-- Install Python dependencies:
+- **Install Python dependencies:**
 
-```powershell
+```bash
 pip install -r requirements.txt
 ```
 
-Generate a list of words
+## Quick Start
+
+The easiest way to generate illustrated vocabulary cards is to use `main.py`, which runs all steps with sensible defaults:
+
+```bash
+# Activate virtual environment first
+source venv/bin/activate  # macOS/Linux
+# .\\venv\\Scripts\\Activate.ps1  # Windows PowerShell
+
+# Generate cards for any topic
+python main.py "weather"
+python main.py "food"
+python main.py "animals"
+```
+
+This will:
+1. Generate 10 Finnish words with translations and example sentences
+2. **Verify Finnish grammar** and naturalness (auto-fixes issues)
+3. Create high-resolution illustrations (720x1440px) for each word
+4. Add text overlays with proper formatting
+
+**Customization:**
+```bash
+python main.py "weather" --count 20 --font-size 36
+```
+
+Final illustrated cards will be in `illustrations_with_text/`.
+
+---
+
+## Advanced Usage
+
+If you need more control over the generation process, you can run each step individually:
+
+### Generate a list of words
 
 Create a list of Finnish words for a topic (e.g. `weather`):
 
@@ -77,9 +136,12 @@ Complete workflow example
 
 Here's a typical end-to-end workflow to create illustrated vocabulary cards:
 
-```powershell
+```bash
 # 1. Activate the virtual environment
-. .\\.venv\\Scripts\\Activate.ps1
+# macOS/Linux:
+source venv/bin/activate
+# Windows PowerShell:
+# .\venv\Scripts\Activate.ps1
 
 # 2. Generate a list of Finnish words with translations and bilingual example sentences
 python generate_word_list.py --topic food --count 10 --output scripts/words_food.json
@@ -112,9 +174,14 @@ If you'd like, I can add a helper that converts a words JSON into individual min
 
 **Virtual Environment**
 
-- **Create:** `python -m venv .venv` — creates a local virtual environment named `.venv`.
-- **Activate (PowerShell):** `. .\\.venv\\Scripts\\Activate.ps1`
-- **Install deps inside venv:** `pip install -r requirements.txt`
+- **Create:**
+  - macOS/Linux: `python3 -m venv venv`
+  - Windows: `python -m venv venv`
+- **Activate:**
+  - macOS/Linux: `source venv/bin/activate`
+  - Windows PowerShell: `.\venv\Scripts\Activate.ps1`
+- **Install dependencies:** `pip install -r requirements.txt`
+
 
 **Defaults & Model Note**
 

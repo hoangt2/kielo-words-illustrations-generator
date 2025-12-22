@@ -33,9 +33,13 @@ def load_words_data(words_json_path: str) -> dict:
                 for item in words_list:
                     if isinstance(item, dict) and 'word' in item:
                         word = item['word'].lower()
+                        # Clean up example sentence (remove parenthetical text which is often unwanted English translation)
+                        raw_example = item.get('example', f'Tämä on {item["word"]}.')
+                        clean_example = re.sub(r'\s*\(.*?\)', '', raw_example).strip()
+                        
                         words_map[word] = {
                             'translation': item.get('translation', item['word']),
-                            'example': item.get('example', f'Tämä on {item["word"]}.'),
+                            'example': clean_example,
                             'example_translation': item.get('example_translation', f'This is {item["word"]}.')
                         }
     except Exception as e:
@@ -77,17 +81,34 @@ def add_text_overlay(
 
     draw = ImageDraw.Draw(img)
 
-    # Try to load monospace font
-    try:
-        font = ImageFont.truetype("C:\\Windows\\Fonts\\consola.ttf", font_size)
-        font_small = ImageFont.truetype("C:\\Windows\\Fonts\\consola.ttf", int(font_size * 0.85))
-    except Exception:
+    # Try to load a clean, readable font (prioritize modern sans-serif fonts)
+    font_paths = [
+        # macOS fonts - modern and readable
+        "/System/Library/Fonts/Avenir Next.ttc",
+        "/System/Library/Fonts/SFNSRounded.ttf",
+        "/System/Library/Fonts/Avenir.ttc",
+        "/System/Library/Fonts/HelveticaNeue.ttc",
+        # Windows fonts
+        "C:\\Windows\\Fonts\\segoeui.ttf",
+        "C:\\Windows\\Fonts\\arial.ttf",
+        # Linux fonts
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+    ]
+    
+    font = None
+    font_small = None
+    for font_path in font_paths:
         try:
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", font_size)
-            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", int(font_size * 0.85))
+            font = ImageFont.truetype(font_path, font_size)
+            font_small = ImageFont.truetype(font_path, int(font_size * 0.85))
+            break
         except Exception:
-            font = ImageFont.load_default()
-            font_small = font
+            continue
+    
+    if font is None:
+        font = ImageFont.load_default()
+        font_small = font
 
 
     def wrap_text(text, font, max_width):
@@ -124,13 +145,16 @@ def add_text_overlay(
         # Try progressively smaller font sizes
         current_size = int(font_size * 0.75)
         while current_size > 8:
-            try:
-                smaller_font = ImageFont.truetype("C:\\Windows\\Fonts\\consola.ttf", current_size)
-            except Exception:
+            smaller_font = None
+            for font_path in font_paths:
                 try:
-                    smaller_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", current_size)
+                    smaller_font = ImageFont.truetype(font_path, current_size)
+                    break
                 except Exception:
-                    smaller_font = font_small
+                    continue
+            
+            if smaller_font is None:
+                smaller_font = font_small
             
             bbox = draw.textbbox((0, 0), text, font=smaller_font)
             text_width = bbox[2] - bbox[0]
@@ -144,17 +168,21 @@ def add_text_overlay(
 
     def find_common_font_size(texts, font, max_width):
         """Find the largest font size that fits all texts on one line."""
-        current_size = int(font_size * 0.75)
-        best_font = font_small
+        current_size = font_size  # Start from the actual font_size, not 75%
+        best_font = font
+        min_font_size = max(20, int(font_size * 0.4))  # Don't go below 40% of font_size or 20px
         
-        while current_size > 8:
-            try:
-                test_font = ImageFont.truetype("C:\\Windows\\Fonts\\consola.ttf", current_size)
-            except Exception:
+        while current_size > min_font_size:
+            test_font = None
+            for font_path in font_paths:
                 try:
-                    test_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", current_size)
+                    test_font = ImageFont.truetype(font_path, current_size)
+                    break
                 except Exception:
-                    test_font = font_small
+                    continue
+            
+            if test_font is None:
+                test_font = font
             
             # Check if all texts fit with this font size
             all_fit = True
@@ -179,74 +207,97 @@ def add_text_overlay(
     color_sentence = (80, 80, 120)     # This is the color for the Finnish example sentence
 
     word_font_size = int(font_size * 1.5)
-    try:
-        word_font = ImageFont.truetype("C:\\Windows\\Fonts\\consola.ttf", word_font_size)
-    except Exception:
+    word_font = None
+    for font_path in font_paths:
         try:
-            word_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", word_font_size)
+            word_font = ImageFont.truetype(font_path, word_font_size)
+            break
         except Exception:
-            word_font = font
+            continue
+    
+    if word_font is None:
+        word_font = font
 
     # Calculate top of centered square illustration
     illustration_top = (img_height - img_width) // 2
 
     # Place text just ABOVE the square (adjust this value to fine-tune)
     text_bottom_padding = 20 # distance from the square to the translation text
+    
+    # Define max text width for wrapping
+    max_text_width = img_width - (padding * 2)
 
     # Finnish word
     bbox_word = draw.textbbox((0, 0), word, font=word_font)
     word_width = bbox_word[2] - bbox_word[0]
     word_height = bbox_word[3] - bbox_word[1]
 
-    # Translation
+    # Translation - wrap if needed
     bbox_trans = draw.textbbox((0, 0), translation, font=font_small)
-    trans_width = bbox_trans[2] - bbox_trans[0]
-    trans_height = bbox_trans[3] - bbox_trans[1]
-
-    # Total height of both lines with spacing proportional to font size
-    spacing_between_lines = int(font_size * 0.3)  # Dynamic spacing based on font size
-    two_line_height = word_height + spacing_between_lines + trans_height
+    translation_lines = wrap_text(translation, font_small, max_text_width)
+    trans_line_height = bbox_trans[3] - bbox_trans[1]
+    trans_total_height = trans_line_height * len(translation_lines) + (len(translation_lines) - 1) * 5
+    
+    # Total height of both Finnish word and translation with spacing
+    spacing_between_lines = int(font_size * 0.5)
+    two_line_height = word_height + spacing_between_lines + trans_total_height
 
     # Final positions
-    translation_y = illustration_top - text_bottom_padding - trans_height
+    translation_y = illustration_top - text_bottom_padding - trans_total_height
     word_y = translation_y - word_height - spacing_between_lines
 
     word_x = (img_width - word_width) // 2
-    trans_x = (img_width - trans_width) // 2
 
-    # Draw them
+    # Draw Finnish word
     draw.text((word_x, word_y), word, fill=color_word, font=word_font)
-    # English word translation (Grey)
-    draw.text((trans_x, translation_y), translation, fill=color_translation, font=font_small)
-
-    # Example sentence at the bottom
-    max_text_width = img_width - (padding * 2)
     
-    # Find a common font size that fits both example sentences on single lines
-    common_font = find_common_font_size([example_sentence, example_sentence_translation], font_small, max_text_width)
+    # Draw translation lines (centered)
+    current_y = translation_y
+    for line in translation_lines:
+        bbox_line = draw.textbbox((0, 0), line, font=font_small)
+        line_width = bbox_line[2] - bbox_line[0]
+        line_x = (img_width - line_width) // 2
+        draw.text((line_x, current_y), line, fill=color_translation, font=font_small)
+        current_y += trans_line_height + 5
 
-    # Calculate positions for bottom text (closer to the square image)
-    line_height = int(font_size * 0.85) + 8
-    total_height = line_height * 2
+    # Example sentences at the bottom - wrap if needed
+    
+    # Wrap example sentences
+    example_lines = wrap_text(example_sentence, font, max_text_width)
+    example_trans_lines = wrap_text(example_sentence_translation, font, max_text_width)
+    
+    # Calculate line height
+    bbox_test = draw.textbbox((0, 0), "Test", font=font)
+    base_line_height = bbox_test[3] - bbox_test[1]
+    line_spacing = 5  # Space between lines within same text block
+    block_spacing = 20  # Space between Finnish and English blocks
     
     # Calculate the square illustration bottom position
     illustration_bottom = illustration_top + img_width
     
     # Place example sentences closer to the square (reduced gap)
-    gap_after_square = 15  # Reduced gap from square to text
+    gap_after_square = 15
     sentence_y = illustration_bottom + gap_after_square
 
-    # Center the example sentence
-    bbox_example = draw.textbbox((0, 0), example_sentence, font=common_font)
-    example_width = bbox_example[2] - bbox_example[0]
-    example_x = (img_width - example_width) // 2
-    draw.text((example_x, sentence_y), example_sentence, fill=color_sentence, font=common_font)
-
-    # Center the example translation
-    bbox_trans_example = draw.textbbox((0, 0), example_sentence_translation, font=common_font)
-    example_trans_width = bbox_trans_example[2] - bbox_trans_example[0]
-    example_trans_x = (img_width - example_trans_width) // 2
-    draw.text((example_trans_x, sentence_y + line_height), example_sentence_translation, fill=color_translation, font=common_font)
+    # Draw Finnish example sentence (centered, multi-line)
+    current_y = sentence_y
+    for line in example_lines:
+        bbox_line = draw.textbbox((0, 0), line, font=font)
+        line_width = bbox_line[2] - bbox_line[0]
+        line_x = (img_width - line_width) // 2
+        draw.text((line_x, current_y), line, fill=color_sentence, font=font)
+        current_y += base_line_height + line_spacing
+    
+    # Add spacing between blocks
+    current_y += block_spacing - line_spacing
+    
+    # Draw English example translation (centered, multi-line)
+    for line in example_trans_lines:
+        bbox_line = draw.textbbox((0, 0), line, font=font)
+        line_width = bbox_line[2] - bbox_line[0]
+        line_x = (img_width - line_width) // 2
+        draw.text((line_x, current_y), line, fill=color_translation, font=font)
+        current_y += base_line_height + line_spacing
 
     try:
         img.save(output_path)
@@ -283,9 +334,13 @@ def main():
                 for item in words_list:
                     if isinstance(item, dict) and 'word' in item:
                         word = item['word'].lower()
+                        # Clean up example sentence (remove parenthetical text)
+                        raw_example = item.get('example', f'Tämä on {item["word"]}.')
+                        clean_example = re.sub(r'\s*\(.*?\)', '', raw_example).strip()
+                        
                         words_data[word] = {
                             'translation': item.get('translation', item['word']),
-                            'example': item.get('example', f'Tämä on {item["word"]}.'),
+                            'example': clean_example,
                             'example_translation': item.get('example_translation', f'This is {item["word"]}.')
                         }
     except Exception as e:

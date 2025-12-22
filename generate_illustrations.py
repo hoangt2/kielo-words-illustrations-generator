@@ -31,10 +31,10 @@ MODEL_NAME = "gemini-2.5-flash-image"
 
 # --- Fixed illustration style description ---
 ILLUSTRATION_STYLE = (
-    "Illustration style: Modern flat illustration with clean lines and a soft, muted color palette. "
-    "Details are minimal but effective, focusing on essential elements like clothing textures, subtle shadows for depth, and distinct objects. "
-    "The overall aesthetic is warm, inviting, and slightly whimsical, reminiscent of casual lifestyle or explainer video graphics. "
-    "The style avoids harsh outlines or heavy shading, opting for a light and airy feel. "
+    "whimsical illustration, flat design, gouache texture, paper texture, "
+    "crayon stroke details, vibrant pastel colors, warm oranges and pinks, lineless art, "
+    "cozy atmosphere, geometric character design, expressive, soft edges, "
+    "high quality storybook art"
 )
 
 ## 🏗️ Core Functions
@@ -182,9 +182,10 @@ def generate_illustration_from_word(word: str, topic: str | None = None, aspect_
     The illustration is generated as a square and then placed in the center of a 9:16 white canvas.
     """
     # Build a direct prompt focused on the word/object itself, not a scene with characters or dialogue
-    topic_context = f" in the '{topic}' category" if topic else ""
+    # Topic word illustration comes first to ensure it's the primary focus
+    topic_prefix = f"{topic} illustration: " if topic else ""
     prompt = (
-        f"Create a visually engaging digital illustration of the Finnish word '{word}'{topic_context}. "
+        f"{topic_prefix}Create a visually engaging digital illustration of the Finnish word '{word}'. "
         f"{ILLUSTRATION_STYLE} "
         f"Do not include any text, captions in the image. "
         f"Focus on depicting the object or concept clearly and centrally positioned in the center of the image. "

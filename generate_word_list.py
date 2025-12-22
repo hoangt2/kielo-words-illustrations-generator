@@ -70,15 +70,21 @@ def parse_args():
 
 def prompt_for_topic(topic: str, count: int) -> str:
     return (
-        "You are a helpful assistant that generates Finnish vocabulary with translations and example sentences. "
-        f"For the topic '{topic}', provide exactly {count} distinct Finnish words as a JSON array of objects. "
-        "Each object must have exactly four fields (no extra fields): "
-        "  - 'word': the Finnish word (single word only) "
-        "  - 'translation': the English translation (one word if possible) "
-        "  - 'example': a simple example sentence in Finnish "
-        "  - 'example_translation': the English translation of the example sentence "
-        "Return ONLY valid JSON, no prose. Example format: "
-        "[{\"word\":\"aurinko\",\"translation\":\"sun\",\"example\":\"Aurinko paistaa.\",\"example_translation\":\"The sun shines.\"}, ...] "
+        "You are a Finnish language expert creating vocabulary learning materials. "
+        f"For the topic '{topic}', generate exactly {count} UNIQUE Finnish words as a JSON array. "
+        "\n\nCRITICAL REQUIREMENTS:\n"
+        "1. Each word must be UNIQUE - NO DUPLICATES of any word\n"
+        "2. Only include real words related to the topic - NO placeholder words like 'esimerkki', 'sana', 'lukeminen'\n"
+        "3. Each object must have exactly four fields:\n"
+        "   - 'word': a single Finnish word (noun, adjective, or verb related to the topic)\n"
+        f"   - 'translation': the English translation\n"
+        "   - 'example': a natural Finnish sentence using the word (strictly Finnish ONLY, no English translations in parentheses)\n"
+        "   - 'example_translation': the English translation of the example\n"
+        "\n4. Examples should be natural and varied - use different sentence structures\n"
+        "5. Format: Return ONLY valid JSON, no extra text\n\n"
+        "Example format:\n"
+        '[{"word":"äiti","translation":"mother","example":"Äitini tekee ruokaa.","example_translation":"My mother is cooking."}, '
+        '{"word":"isä","translation":"father","example":"Isäni lukee sanomalehteä.","example_translation":"My father is reading the newspaper."}]'
     )
 
 
@@ -337,7 +343,23 @@ def main():
             fallback_words = FALLBACK_VOCAB.get(topic.lower(), [])[:count]
             words = [{'word': w, 'translation': w, 'example': f'Tämä on {w}.', 'example_translation': f'This is {w}.'} for w in fallback_words]
 
-    words = words[:count]
+    # Remove duplicates - keep first occurrence of each word
+    seen_words = set()
+    unique_words = []
+    for word_obj in words:
+        word_lower = word_obj['word'].lower()
+        if word_lower not in seen_words:
+            seen_words.add(word_lower)
+            unique_words.append(word_obj)
+    
+    if len(unique_words) < len(words):
+        print(f"⚠️ Removed {len(words) - len(unique_words)} duplicate word(s)")
+    
+    # Ensure we have exactly the requested count
+    words = unique_words[:count]
+    
+    if len(words) < count:
+        print(f"⚠️ Warning: Only {len(words)} unique words generated (requested {count})")
 
     out_dir = os.path.dirname(args.output) or "."
     os.makedirs(out_dir, exist_ok=True)
@@ -345,7 +367,7 @@ def main():
     with open(args.output, "w", encoding="utf-8") as f:
         json.dump(words, f, ensure_ascii=False, indent=2)
 
-    print(f"✅ Wrote {len(words)} words (with translations and examples) for topic '{topic}' to {args.output}")
+    print(f"✅ Wrote {len(words)} unique words (with translations and examples) for topic '{topic}' to {args.output}")
 
 
 if __name__ == "__main__":
