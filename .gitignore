@@ -2,8 +2,8 @@
 illustrations/
 illustrations_with_text/
 
-# Generated word lists
-scripts/words_*.json
+# Generated scripts and word lists
+scripts/
 
 # Python
 __pycache__/

@@ -31,10 +31,7 @@ MODEL_NAME = "gemini-2.5-flash-image"
 
 # --- Fixed illustration style description ---
 ILLUSTRATION_STYLE = (
-    "whimsical illustration, flat design, gouache texture, paper texture, "
-    "crayon stroke details, vibrant pastel colors, warm oranges and pinks, lineless art, "
-    "cozy atmosphere, geometric character design, expressive, soft edges, "
-    "high quality storybook art"
+    "Use a warm, modern flat-vector illustration style with soft pastel colors, clean lines, and simple but expressive facial features. Think of a style that could be used in educational flashcards or language-learning apps—playful yet clear, conveying both the action and the meaning."
 )
 
 ## 🏗️ Core Functions
@@ -191,7 +188,7 @@ def generate_illustration_from_word(word: str, topic: str | None = None, aspect_
         f"Focus on depicting the object or concept clearly and centrally positioned in the center of the image. "
         f"The illustrated object should be prominently centered with generous whitespace or soft background around it. "
         f"The image should be a single, clean, minimalist illustration that clearly represents the meaning of '{word}'. "
-        f"Use the soft, warm color palette and flat design style. "
+        f"Use a vibrant, balanced color palette and modern flat design style. "
     )
     print(f"\n🎨 Generating illustration for word: {word}")
     print(f"➡️ Prompt: {prompt[:200]}...")

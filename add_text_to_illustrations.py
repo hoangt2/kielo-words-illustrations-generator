@@ -98,10 +98,15 @@ def add_text_overlay(
     
     font = None
     font_small = None
+    font_example = None  # Larger font for bottom example sentences
+    used_font_path = None # Store the path that works
+
     for font_path in font_paths:
         try:
             font = ImageFont.truetype(font_path, font_size)
             font_small = ImageFont.truetype(font_path, int(font_size * 0.85))
+            font_example = ImageFont.truetype(font_path, int(font_size * 1.15))  # 15% larger for examples
+            used_font_path = font_path
             break
         except Exception:
             continue
@@ -109,6 +114,7 @@ def add_text_overlay(
     if font is None:
         font = ImageFont.load_default()
         font_small = font
+        font_example = font
 
 
     def wrap_text(text, font, max_width):
@@ -134,32 +140,33 @@ def add_text_overlay(
 
         return lines
 
-    def fit_text_to_one_line(text, font, max_width):
+    def fit_text_to_one_line(text, font, max_width, start_size):
         """Adjust font size to fit text on one line, or return the text with smaller font."""
+        target_width = max_width * 0.95 # Safety margin
+        
         bbox = draw.textbbox((0, 0), text, font=font)
         text_width = bbox[2] - bbox[0]
         
-        if text_width <= max_width:
+        if text_width <= target_width:
             return text, font
         
         # Try progressively smaller font sizes
-        current_size = int(font_size * 0.75)
+        current_size = int(start_size * 0.9)
         while current_size > 8:
             smaller_font = None
-            for font_path in font_paths:
+            if used_font_path:
                 try:
-                    smaller_font = ImageFont.truetype(font_path, current_size)
-                    break
+                    smaller_font = ImageFont.truetype(used_font_path, current_size)
                 except Exception:
-                    continue
+                    pass
             
             if smaller_font is None:
-                smaller_font = font_small
+                 smaller_font = ImageFont.load_default()
             
             bbox = draw.textbbox((0, 0), text, font=smaller_font)
             text_width = bbox[2] - bbox[0]
             
-            if text_width <= max_width:
+            if text_width <= target_width:
                 return text, smaller_font
             
             current_size -= 2
@@ -206,14 +213,23 @@ def add_text_overlay(
     color_translation = (100, 100, 100) # This is the grey color for English translations
     color_sentence = (80, 80, 120)     # This is the color for the Finnish example sentence
 
-    word_font_size = int(font_size * 1.5)
+    word_font_size = int(font_size * 2.0)  # Main word should be prominent but not overlapping
     word_font = None
-    for font_path in font_paths:
+    word_font = None
+    if used_font_path:
         try:
-            word_font = ImageFont.truetype(font_path, word_font_size)
-            break
+            word_font = ImageFont.truetype(used_font_path, word_font_size)
         except Exception:
-            continue
+            pass
+    
+    if word_font is None:
+        # Try to find any font if the used one failed for this size
+         for font_path in font_paths:
+            try:
+                word_font = ImageFont.truetype(font_path, word_font_size)
+                break
+            except Exception:
+                continue
     
     if word_font is None:
         word_font = font
@@ -227,7 +243,8 @@ def add_text_overlay(
     # Define max text width for wrapping
     max_text_width = img_width - (padding * 2)
 
-    # Finnish word
+    # Finnish word - Ensure it fits!
+    _, word_font = fit_text_to_one_line(word, word_font, max_text_width, start_size=word_font_size)
     bbox_word = draw.textbbox((0, 0), word, font=word_font)
     word_width = bbox_word[2] - bbox_word[0]
     word_height = bbox_word[3] - bbox_word[1]
@@ -239,7 +256,7 @@ def add_text_overlay(
     trans_total_height = trans_line_height * len(translation_lines) + (len(translation_lines) - 1) * 5
     
     # Total height of both Finnish word and translation with spacing
-    spacing_between_lines = int(font_size * 0.5)
+    spacing_between_lines = int(font_size * 1.2)  # Increased spacing to prevent overlap with larger word
     two_line_height = word_height + spacing_between_lines + trans_total_height
 
     # Final positions
@@ -260,15 +277,52 @@ def add_text_overlay(
         draw.text((line_x, current_y), line, fill=color_translation, font=font_small)
         current_y += trans_line_height + 5
 
-    # Example sentences at the bottom - wrap if needed
+    # Example sentences at the bottom - wrap both to use available white space
     
-    # Wrap example sentences
-    example_lines = wrap_text(example_sentence, font, max_text_width)
-    example_trans_lines = wrap_text(example_sentence_translation, font, max_text_width)
+    # Wrap both Finnish and English example sentences to multiple lines using separate fonts if needed
+    # Check if lines fit, if not shrink font
     
-    # Calculate line height
-    bbox_test = draw.textbbox((0, 0), "Test", font=font)
-    base_line_height = bbox_test[3] - bbox_test[1]
+    def get_lines_and_font(text, start_font_size, max_w):
+        current_s = start_font_size
+        target_w = max_w * 0.95
+        best_f = None
+        final_lines = []
+        
+        while current_s > 10:
+            # Load font
+            test_f = None
+            if used_font_path:
+                try:
+                    test_f = ImageFont.truetype(used_font_path, current_s)
+                except: pass
+            
+            if test_f is None: test_f = ImageFont.load_default()
+            
+            # Wrap
+            lines = wrap_text(text, test_f, max_w) # Wrap using full width
+            
+            # Check overflow of single words or lines against target width
+            any_overflow = False
+            for line in lines:
+                bbox = draw.textbbox((0, 0), line, font=test_f)
+                if (bbox[2] - bbox[0]) > target_w:
+                    any_overflow = True
+                    break
+            
+            if not any_overflow:
+                return lines, test_f
+            
+            current_s -= 2
+            
+        return wrap_text(text, ImageFont.load_default(), max_w), ImageFont.load_default()
+
+    initial_ex_size = int(font_size * 0.75)
+    example_lines, font_example_fi = get_lines_and_font(example_sentence, initial_ex_size, max_text_width)
+    example_trans_lines, font_example_en = get_lines_and_font(example_sentence_translation, initial_ex_size, max_text_width)
+    
+    # Calculate line height for example text
+    bbox_test = draw.textbbox((0, 0), "Test", font=font_example)
+    example_line_height = bbox_test[3] - bbox_test[1]
     line_spacing = 5  # Space between lines within same text block
     block_spacing = 20  # Space between Finnish and English blocks
     
@@ -282,22 +336,22 @@ def add_text_overlay(
     # Draw Finnish example sentence (centered, multi-line)
     current_y = sentence_y
     for line in example_lines:
-        bbox_line = draw.textbbox((0, 0), line, font=font)
+        bbox_line = draw.textbbox((0, 0), line, font=font_example_fi)
         line_width = bbox_line[2] - bbox_line[0]
         line_x = (img_width - line_width) // 2
-        draw.text((line_x, current_y), line, fill=color_sentence, font=font)
-        current_y += base_line_height + line_spacing
+        draw.text((line_x, current_y), line, fill=color_sentence, font=font_example_fi)
+        current_y += example_line_height + line_spacing
     
     # Add spacing between blocks
     current_y += block_spacing - line_spacing
     
     # Draw English example translation (centered, multi-line)
     for line in example_trans_lines:
-        bbox_line = draw.textbbox((0, 0), line, font=font)
+        bbox_line = draw.textbbox((0, 0), line, font=font_example_en)
         line_width = bbox_line[2] - bbox_line[0]
         line_x = (img_width - line_width) // 2
-        draw.text((line_x, current_y), line, fill=color_translation, font=font)
-        current_y += base_line_height + line_spacing
+        draw.text((line_x, current_y), line, fill=color_translation, font=font_example_en)
+        current_y += example_line_height + line_spacing
 
     try:
         img.save(output_path)

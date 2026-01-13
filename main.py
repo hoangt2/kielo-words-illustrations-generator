@@ -55,11 +55,17 @@ def main():
         default=48,
         help="Font size for text overlay (default: 48)"
     )
+    parser.add_argument(
+        "--text-only",
+        action="store_true",
+        help="Only regenerate text overlays on existing illustrations (skips word generation and image generation)"
+    )
     args = parser.parse_args()
     
     topic = args.topic
     count = args.count
     font_size = args.font_size
+    text_only = args.text_only
     
     # Define paths
     scripts_dir = Path("scripts")
@@ -74,40 +80,54 @@ def main():
     print(f"🎨 Kielo Word List & Illustration Generator")
     print(f"{'='*60}")
     print(f"Topic: {topic}")
-    print(f"Word count: {count}")
+    if not text_only:
+        print(f"Word count: {count}")
     print(f"Font size: {font_size}")
+    print(f"Mode: {'Text overlay only' if text_only else 'Full generation'}")
     print(f"Output: {output_dir}")
     print(f"{'='*60}\n")
     
-    # Step 1: Generate word list
-    cmd_words = [
-        sys.executable,
-        "generate_word_list.py",
-        "--topic", topic,
-        "--count", str(count),
-        "--output", str(words_json)
-    ]
-    run_command(cmd_words, f"Step 1/4: Generating {count} Finnish words for topic '{topic}'")
+    if text_only:
+        # Check if required files exist
+        if not words_json.exists():
+            print(f"❌ Error: Words file not found: {words_json}")
+            print(f"   Run without --text-only first to generate words and illustrations.")
+            sys.exit(1)
+        if not illustrations_dir.exists() or not any(illustrations_dir.glob("*.png")):
+            print(f"❌ Error: No illustrations found in: {illustrations_dir}")
+            print(f"   Run without --text-only first to generate illustrations.")
+            sys.exit(1)
+    else:
+        # Step 1: Generate word list
+        cmd_words = [
+            sys.executable,
+            "generate_word_list.py",
+            "--topic", topic,
+            "--count", str(count),
+            "--output", str(words_json)
+        ]
+        run_command(cmd_words, f"Step 1/4: Generating {count} Finnish words for topic '{topic}'")
+        
+        # Step 2: Verify and fix grammar
+        cmd_grammar = [
+            sys.executable,
+            "verify_grammar.py",
+            "--words-json", str(words_json)
+        ]
+        run_command(cmd_grammar, f"Step 2/4: Verifying Finnish grammar and naturalness")
+        
+        # Step 3: Generate illustrations
+        cmd_illustrations = [
+            sys.executable,
+            "generate_illustrations.py",
+            "--words-json", str(words_json),
+            "--topic", topic,
+            "--aspect", "9:16"
+        ]
+        run_command(cmd_illustrations, f"Step 3/4: Generating illustrations for '{topic}'")
     
-    # Step 2: Verify and fix grammar
-    cmd_grammar = [
-        sys.executable,
-        "verify_grammar.py",
-        "--words-json", str(words_json)
-    ]
-    run_command(cmd_grammar, f"Step 2/4: Verifying Finnish grammar and naturalness")
-    
-    # Step 3: Generate illustrations
-    cmd_illustrations = [
-        sys.executable,
-        "generate_illustrations.py",
-        "--words-json", str(words_json),
-        "--topic", topic,
-        "--aspect", "9:16"
-    ]
-    run_command(cmd_illustrations, f"Step 3/4: Generating illustrations for '{topic}'")
-    
-    # Step 4: Add text overlay
+    # Step 4: Add text overlay (always runs)
+    step_label = "Step 1/1" if text_only else "Step 4/4"
     cmd_text = [
         sys.executable,
         "add_text_to_illustrations.py",
@@ -116,28 +136,34 @@ def main():
         "--output-dir", str(output_dir),
         "--font-size", str(font_size)
     ]
-    run_command(cmd_text, f"Step 4/4: Adding text overlays to illustrations")
+    run_command(cmd_text, f"{step_label}: Adding text overlays to illustrations")
 
-    # Step 5: Generate TikTok caption
-    caption_file = scripts_dir / f"caption_{topic}.txt"
-    cmd_caption = [
-        sys.executable,
-        "generate_caption.py",
-        "--topic", topic,
-        "--output", str(caption_file)
-    ]
-    run_command(cmd_caption, f"Step 5/5: Generating TikTok caption")
+    if not text_only:
+        # Step 5: Generate TikTok caption
+        caption_file = scripts_dir / f"caption_{topic}.txt"
+        cmd_caption = [
+            sys.executable,
+            "generate_caption.py",
+            "--topic", topic,
+            "--output", str(caption_file)
+        ]
+        run_command(cmd_caption, f"Step 5/5: Generating TikTok caption")
     
     # Success message
     print(f"\n{'='*60}")
     print(f"🎉 SUCCESS!")
     print(f"{'='*60}")
-    print(f"✨ Generated illustrated vocabulary cards for topic: {topic}")
+    if text_only:
+        print(f"✨ Regenerated text overlays for topic: {topic}")
+    else:
+        print(f"✨ Generated illustrated vocabulary cards for topic: {topic}")
     print(f"📁 Output directory: {output_dir}/")
     print(f"📝 Word list: {words_json}")
     print(f"🖼️  Illustrations: {illustrations_dir}/")
     print(f"🎨 Final cards: {output_dir}/")
-    print(f"📄 Caption: {caption_file}")
+    if not text_only:
+        caption_file = scripts_dir / f"caption_{topic}.txt"
+        print(f"📄 Caption: {caption_file}")
     print(f"{'='*60}\n")
 
 
