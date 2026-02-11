@@ -57,16 +57,78 @@ def add_text_overlay(
 ):
     """
     Add text overlay directly on the illustration image.
+    Includes TikTok-safe margins to prevent content from being cut off in carousel view.
+    Creates a new white canvas and scales down the illustration to fit within the safe area.
     """
 
     try:
-        img = Image.open(image_path).convert("RGB")
+        source_img = Image.open(image_path).convert("RGB")
     except Exception as e:
         print(f"❌ Error loading image {image_path}: {e}")
         return False
 
-    # Image dimensions
+    # Original image dimensions
+    orig_width, orig_height = source_img.size
+    
+    # Create a new white canvas at the same size
+    img = Image.new("RGB", (orig_width, orig_height), (255, 255, 255))
     img_width, img_height = img.size
+    
+    # TikTok safe zone margins (15% top and bottom to avoid UI overlap)
+    safe_margin_percent = 0.15
+    safe_margin_top = int(img_height * safe_margin_percent)
+    safe_margin_bottom = int(img_height * safe_margin_percent)
+    safe_area_height = img_height - safe_margin_top - safe_margin_bottom
+    
+    # Extract the center square from the source image (the illustration part)
+    # The source is 9:16 (e.g., 720x1280), so the illustration is the center 720x720 square
+    square_size = min(orig_width, orig_height)  # Get the smaller dimension
+    
+    # Calculate crop box to extract center square
+    if orig_width < orig_height:
+        # Portrait: crop from top and bottom
+        crop_left = 0
+        crop_top = (orig_height - square_size) // 2
+        crop_right = orig_width
+        crop_bottom = crop_top + square_size
+    else:
+        # Landscape: crop from left and right
+        crop_left = (orig_width - square_size) // 2
+        crop_top = 0
+        crop_right = crop_left + square_size
+        crop_bottom = orig_height
+    
+    # Extract the square illustration
+    illustration_square = source_img.crop((crop_left, crop_top, crop_right, crop_bottom))
+    
+    # Calculate scaled illustration size (leave room for text above and below)
+    # Illustration should take up ~48% of the safe area height to leave more room for text
+    illustration_scale = 0.48
+    scaled_size = int(safe_area_height * illustration_scale)
+    
+    # Ensure it doesn't exceed available width
+    max_width = img_width - (padding * 2)
+    scaled_size = min(scaled_size, max_width)
+    
+    # Resize the square illustration proportionally (no distortion)
+    scaled_illustration = illustration_square.resize(
+        (scaled_size, scaled_size), 
+        Image.Resampling.LANCZOS
+    )
+    
+    # Calculate position to center the scaled illustration in the safe area
+    # Leave room at top for word/translation, and more room at bottom for example sentences
+    top_text_space = int(safe_area_height * 0.18)  # 18% for text above
+    
+    illustration_y = safe_margin_top + top_text_space
+    illustration_x = (img_width - scaled_size) // 2
+    
+    # Paste the scaled illustration onto the white canvas
+    img.paste(scaled_illustration, (illustration_x, illustration_y))
+    
+    # Store illustration bounds for text positioning
+    illustration_top = illustration_y
+    illustration_bottom = illustration_y + scaled_size
 
     # Get translation and example sentence
     word_lower = word.lower()
@@ -234,11 +296,9 @@ def add_text_overlay(
     if word_font is None:
         word_font = font
 
-    # Calculate top of centered square illustration
-    illustration_top = (img_height - img_width) // 2
-
-    # Place text just ABOVE the square (adjust this value to fine-tune)
-    text_bottom_padding = 20 # distance from the square to the translation text
+    # Text positioning uses illustration_top and illustration_bottom calculated above
+    # when we placed the scaled illustration
+    text_bottom_padding = 15  # distance from the illustration to the translation text
     
     # Define max text width for wrapping
     max_text_width = img_width - (padding * 2)
@@ -256,12 +316,18 @@ def add_text_overlay(
     trans_total_height = trans_line_height * len(translation_lines) + (len(translation_lines) - 1) * 5
     
     # Total height of both Finnish word and translation with spacing
-    spacing_between_lines = int(font_size * 1.2)  # Increased spacing to prevent overlap with larger word
+    spacing_between_lines = int(font_size * 0.8)  # Reduced spacing to fit in safe area
     two_line_height = word_height + spacing_between_lines + trans_total_height
 
-    # Final positions
+    # Position text above illustration, ensuring it stays within safe area
+    # Translation sits just above the illustration
     translation_y = illustration_top - text_bottom_padding - trans_total_height
     word_y = translation_y - word_height - spacing_between_lines
+    
+    # Ensure word doesn't go above safe margin
+    if word_y < safe_margin_top + 10:
+        word_y = safe_margin_top + 10
+        translation_y = word_y + word_height + spacing_between_lines
 
     word_x = (img_width - word_width) // 2
 
@@ -326,12 +392,13 @@ def add_text_overlay(
     line_spacing = 5  # Space between lines within same text block
     block_spacing = 20  # Space between Finnish and English blocks
     
-    # Calculate the square illustration bottom position
-    illustration_bottom = illustration_top + img_width
-    
-    # Place example sentences closer to the square (reduced gap)
+    # illustration_bottom is already calculated when we placed the scaled illustration
+    # Place example sentences below illustration, within the bottom text area
     gap_after_square = 15
     sentence_y = illustration_bottom + gap_after_square
+    
+    # Calculate max Y position to ensure text stays within safe area
+    max_y = img_height - safe_margin_bottom - 10
 
     # Draw Finnish example sentence (centered, multi-line)
     current_y = sentence_y
@@ -346,7 +413,10 @@ def add_text_overlay(
     current_y += block_spacing - line_spacing
     
     # Draw English example translation (centered, multi-line)
+    # Only draw if we have room in the safe area
     for line in example_trans_lines:
+        if current_y + example_line_height > max_y:
+            break  # Stop if we'd exceed safe area
         bbox_line = draw.textbbox((0, 0), line, font=font_example_en)
         line_width = bbox_line[2] - bbox_line[0]
         line_x = (img_width - line_width) // 2
