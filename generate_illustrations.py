@@ -31,7 +31,7 @@ MODEL_NAME = "gemini-2.5-flash-image"
 
 # --- Fixed illustration style description ---
 ILLUSTRATION_STYLE = (
-    "Use a warm, modern flat-vector illustration style with soft pastel colors, clean lines, and simple but expressive facial features. Think of a style that could be used in educational flashcards or language-learning apps—playful yet clear, conveying both the action and the meaning."
+    "in a playful, modern doodle style. Bold, thick black outlines with variable line weight. Use a vibrant and conventional color palette. Solid, warm off-white background. High contrast, clean, and quirky aesthetic. Show only the single object in its most simple, recognizable form. No face, no smiley, no anthropomorphism on inanimate objects. Animals and people should have natural faces. No text, no labels, no words, no letters. No extra decorations, no stars, no sparkles, no background doodles. Minimal detail, keep it clean and uncluttered."
 )
 
 ## 🏗️ Core Functions
@@ -121,7 +121,7 @@ def generate_illustration_from_json(json_path: str, aspect_ratio: str = "9:16"):
         )
     except Exception as e:
         print(f"❌ API Error during generation for {os.path.basename(json_path)}: {e}")
-        return
+        return False
 
     # Check 1: Ensure candidates were generated at all.
     if not response.candidates:
@@ -130,7 +130,7 @@ def generate_illustration_from_json(json_path: str, aspect_ratio: str = "9:16"):
             print(f"   Reason: Content was blocked due to {response.prompt_feedback.block_reason}.")
         else:
             print("   Reason: Unknown failure. Check prompt safety or API logs.")
-        return
+        return False
 
     # Check 2 (The Fix): Ensure the content object exists to avoid AttributeError.
     first_candidate = response.candidates[0]
@@ -139,7 +139,7 @@ def generate_illustration_from_json(json_path: str, aspect_ratio: str = "9:16"):
         finish_reason = first_candidate.finish_reason.name if first_candidate.finish_reason else 'Unknown'
         print(f"   Candidate Finish Reason: {finish_reason}.")
         print("   Try simplifying the scene description or checking API safety guidelines.")
-        return
+        return False
 
     # Extract and save image(s)
     for part in first_candidate.content.parts:
@@ -161,9 +161,10 @@ def generate_illustration_from_json(json_path: str, aspect_ratio: str = "9:16"):
 
             image.save(output_path)
             print(f"✅ Image saved to {output_path}")
-            return # Assuming only one image is desired per script
+            return True # Assuming only one image is desired per script
 
     print(f"⚠️ No image data found in model response parts for {os.path.basename(json_path)}. Check API logs.")
+    return False
 
 
 def _sanitize_filename(s: str) -> str:
@@ -203,16 +204,16 @@ def generate_illustration_from_word(word: str, topic: str | None = None, aspect_
         response = client.models.generate_content(model=MODEL_NAME, contents=[prompt], config=config)
     except Exception as e:
         print(f"❌ API Error during generation for word '{word}': {e}")
-        return
+        return False
 
     if not response.candidates:
         print(f"⚠️ No candidates generated for word '{word}'")
-        return
+        return False
 
     first_candidate = response.candidates[0]
     if first_candidate.content is None:
         print(f"⚠️ Candidate content is None for word '{word}'. Likely safety block.")
-        return
+        return False
 
     for part in first_candidate.content.parts:
         if part.inline_data is not None:
@@ -258,9 +259,10 @@ def generate_illustration_from_word(word: str, topic: str | None = None, aspect_
 
             canvas.save(output_path, quality=95)
             print(f"✅ Image saved to {output_path} ({canvas_width}x{canvas_height}px)")
-            return
+            return True
 
     print(f"⚠️ No image data found in model response parts for word '{word}'.")
+    return False
 
 def main():
     """Main function to process all JSON scripts and generate illustrations."""
@@ -298,7 +300,11 @@ def main():
             topic_fragment = f"_{_sanitize_filename(args.topic)}" if args.topic else ""
             output_filename = f"word_{safe}{topic_fragment}.png"
             
-            generate_illustration_from_word(word, topic=args.topic, aspect_ratio=args.aspect)
+            success = generate_illustration_from_word(word, topic=args.topic, aspect_ratio=args.aspect)
+            if not success:
+                import sys
+                print(f"❌ Stopping generation due to error on word '{word}'")
+                sys.exit(1)
             
             # Record the mapping
             mapping.append({
@@ -323,7 +329,11 @@ def main():
 
     for file in files:
         json_path = os.path.join(INPUT_DIR, file)
-        generate_illustration_from_json(json_path, aspect_ratio=args.aspect)
+        success = generate_illustration_from_json(json_path, aspect_ratio=args.aspect)
+        if not success:
+            import sys
+            print(f"❌ Stopping generation due to error on {file}")
+            sys.exit(1)
 
 
 if __name__ == "__main__":
