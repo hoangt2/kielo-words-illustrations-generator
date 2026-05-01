@@ -174,21 +174,23 @@ def _sanitize_filename(s: str) -> str:
     return s or "word"
 
 
-def generate_illustration_from_word(word: str, topic: str | None = None, aspect_ratio: str = "9:16"):
+def generate_illustration_from_word(word: str, topic: str | None = None, aspect_ratio: str = "9:16", meaning: str | None = None):
     """Generate an illustration for a single Finnish word.
     Creates a direct, object-focused prompt tailored for concrete/abstract objects without dialogue.
     The illustration is generated as a square and then placed in the center of a 9:16 white canvas.
+    Uses the English meaning in the prompt to avoid the model rendering Finnish text in the image.
     """
-    # Build a direct prompt focused on the word/object itself, not a scene with characters or dialogue
-    # Topic word illustration comes first to ensure it's the primary focus
-    topic_prefix = f"{topic} illustration: " if topic else ""
+    # Use the English meaning for the prompt to prevent the model from rendering
+    # the Finnish word as text inside the illustration
+    display_concept = meaning if meaning else word
+    topic_context = f" in the context of {topic}" if topic else ""
     prompt = (
-        f"{topic_prefix}Create a visually engaging digital illustration of the Finnish word '{word}'. "
+        f"Create a visually engaging digital illustration depicting the concept of '{display_concept}'{topic_context}. "
         f"{ILLUSTRATION_STYLE} "
-        f"Do not include any text, captions in the image. "
+        f"CRITICAL: The image must contain ABSOLUTELY NO TEXT whatsoever. No words, no letters, no numbers, no labels, no captions, no writing of any kind. "
         f"Focus on depicting the object or concept clearly and centrally positioned in the center of the image. "
         f"The illustrated object should be prominently centered with generous whitespace or soft background around it. "
-        f"The image should be a single, clean, minimalist illustration that clearly represents the meaning of '{word}'. "
+        f"The image should be a single, clean, minimalist illustration that clearly represents '{display_concept}'. "
         f"Use a vibrant, balanced color palette and modern flat design style. "
     )
     print(f"\n🎨 Generating illustration for word: {word}")
@@ -295,12 +297,13 @@ def main():
         for idx, w in enumerate(words):
             word_obj = w if isinstance(w, dict) else {'word': str(w)}
             word = word_obj.get('word', str(w))
+            meaning = word_obj.get('translation', None) if isinstance(w, dict) else None
             
             safe = _sanitize_filename(word)
             topic_fragment = f"_{_sanitize_filename(args.topic)}" if args.topic else ""
             output_filename = f"word_{safe}{topic_fragment}.png"
             
-            success = generate_illustration_from_word(word, topic=args.topic, aspect_ratio=args.aspect)
+            success = generate_illustration_from_word(word, topic=args.topic, aspect_ratio=args.aspect, meaning=meaning)
             if not success:
                 import sys
                 print(f"❌ Stopping generation due to error on word '{word}'")
