@@ -81,7 +81,7 @@ If there are ANY issues, provide corrections in this JSON format:
 
         try:
             response = client.models.generate_content(
-                model='gemini-2.0-flash',
+                model='gemini-2.5-flash',
                 contents=[prompt],
                 config=types.GenerateContentConfig(
                     temperature=0.1,
