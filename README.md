@@ -170,18 +170,6 @@ Notes
 - Text spacing is proportional to font size for consistent visual presentation.
 - Example sentences are auto-scaled to fit on single lines.
 
-If you'd like, I can add a helper that converts a words JSON into individual minimal script JSON files in `scripts/`.
-
-**Virtual Environment**
-
-- **Create:**
-  - macOS/Linux: `python3 -m venv venv`
-  - Windows: `python -m venv venv`
-- **Activate:**
-  - macOS/Linux: `source venv/bin/activate`
-  - Windows PowerShell: `.\venv\Scripts\Activate.ps1`
-- **Install dependencies:** `pip install -r requirements.txt`
-
 
 **Defaults & Model Note**
 
@@ -203,7 +191,6 @@ If you'd like, I can add a helper that converts a words JSON into individual min
 pip install --upgrade google-generativeai google-cloud-aiplatform
 ```
 
-If you'd like, I can add an automatic `ListModels` step to select a compatible text model from your account — tell me if you'd like that behavior.
 
 **Output format from generate_word_list.py**
 
